@@ -18,7 +18,6 @@ raw_table_data = load_table_data('can_data_all_model', car_option)  # 原始数�
 # 缓存：导入CAN数据
 raw_table_data = import_can(raw_table_data)
 
-
 # 显示对应车型的可自定义功能
 def show_Enable_Func():
     _func_options_list = list(raw_table_data.iloc[:,0])
@@ -27,6 +26,7 @@ def show_Enable_Func():
 
 show_Enable_Func()
 
+@st.cache_data(experimental_allow_widgets=True)
 def show_Edit(dataframe):    # 初次显示编辑区
     print('running show_Edit')
     try:
@@ -41,16 +41,14 @@ def show_Edit(dataframe):    # 初次显示编辑区
                     cmd_value = int(cmd_value)
                 elif value_step == 0.01:    # 浮点型
                     cmd_value = float(cmd_value)
-                st.sidebar.number_input(cmd_name, step=value_step, value=cmd_value,key=cmd_name,on_change=input_callback,args=(cmd_name,))    # 可自定义输入
+                st.sidebar.number_input(cmd_name, step=value_step, value=cmd_value,key=cmd_name)    # 可自定义输入
 
             elif cmd_type == ON_OFF_TYPE_FLAG: # 可选
                 cmd_options = row.iloc[8][0].keys() # 选项提取
-                st.sidebar.selectbox(cmd_name, options = cmd_options, index= 0,key=cmd_name,on_change=selected_callback,args=(cmd_name,))    # 可选
+                st.sidebar.selectbox(cmd_name, options = cmd_options, index= 0,key=cmd_name)    # 可选
         return True
     except Exception as e:
         print('{0} show_Edit err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
-
-
 
 def input_callback(cmd_name):
     try:
@@ -88,7 +86,25 @@ def selected_callback(cmd_name):
 show_Edit(raw_table_data)
 
 
-# 显示表格
-st.dataframe(raw_table_data,use_container_width=True)
+for key in st.session_state.keys():         # 每次刷新根据session state更新dataframe
+    cur_value = st.session_state[key]   # 当前值
+    row = raw_table_data.loc[raw_table_data['name'] == key].index[0]   # 获取行
+    cmd_type = raw_table_data.iloc[row,11]  # type
+    if cmd_type == CUSTOM_INPUT_TYPE_FLAG:      # 自定义输入类型
+        pass
+    elif cmd_type == ON_OFF_TYPE_FLAG:          # 可选择类型
+        example = raw_table_data.iloc[row,8]    
+        can_data = example[0][cur_value]        # 取出待发送can数据
+        # 更新dataframe
+        raw_table_data.iloc[row,1] = can_data   # 更新can_data列
+        raw_table_data.iloc[row,10] = cur_value # 更新 value 列
+
+        print('Type 2 -> update can_data:',can_data,';update value:', cur_value)
+
 print(raw_table_data)
+st.dataframe(raw_table_data)
 print(st.session_state)
+
+## 任务：
+## @st.cache_data(experimental_allow_widgets=True)
+## 切换车辆 如何更新session state

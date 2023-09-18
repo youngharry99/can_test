@@ -94,22 +94,25 @@ def import_can(raw_table_data):# 导入can数据
             data_list = [line.split('#') for line in row.iloc[8].strip().split('\n')]
             default_key = None  # 默认第一个键
             default_value = None  # 默认第一个值
-            can_example_dict = {}
+            can_example_dict = {}   # 字典  {'value1:can_data1','value2:can_data2'}
             for index, item in enumerate(data_list):
                 key = item[2]   # 取得键值
                 value = item[0] + '#' + can_Data_Format(item[1])
                 can_example_dict[key] = value
-                if index == 0 :     # 取得 第一个键值放入value 和 command
+
+                if index == 0 :     # 默认：取第一个键值对放入value 和 command
                     default_key = key
-                    default_value = value
-            # 将列表插入单元格中
+                    default_can_data = value
+
+            # 将can_example_dict字典变成列表插入example单元格中
             raw_table_data.iloc[pos,8] = [can_example_dict]
 
-            if row.loc['type'] == 1:    # 如果为自定义输入,提取其中
+            if row.loc['type'] == 1:    # 如果为自定义输入类型,提取其中的数字字符串
                 default_key = extract_number(default_key)
 
+            # 将初始化[默认为第一位]的 value插入value单元格中，default_can_data放入can_data
             raw_table_data.iloc[pos,10] = default_key
-            raw_table_data.iloc[pos,1] = default_value
+            raw_table_data.iloc[pos,1] = default_can_data
         return raw_table_data
     except Exception as e:
         print('{0} import_can err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
