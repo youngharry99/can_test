@@ -1,22 +1,26 @@
 import streamlit as st
 import pandas as pd
 from func import *  # 封装功能
-st.set_page_config(layout="wide",
-                   page_title='CAN Data')
 
-# 显示标题
-st.title(':blue[模拟 CAN Data] Platform')
+def clear_session_state():
+    # Delete all the items in Session state
+    if st.session_state:
+        for key in st.session_state.keys():
+            del st.session_state[key]
+    return True
 
-# 显示选择车型
-_car_options = load_car_names('can_data_all_model')
-car_option = st.selectbox('选择车型', _car_options, index= 0)
-print('选择车型:', car_option)
+def change_car_callback():  # 改变车辆时，清除原来所有session state
+    if clear_session_state():
+        print('{0} clear session state success!'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]')))
 
-# 缓存：获取原始数据
-raw_table_data = load_table_data('can_data_all_model', car_option)  # 原始数据
+    return
 
-# 缓存：导入CAN数据
-raw_table_data = import_can(raw_table_data)
+# 显示选择车型,使用 缓存load_car_names数据
+def show_car_names():   # 选择车型
+    _car_options = load_car_names('can_data_all_model')
+    car_option = st.selectbox('选择车型', _car_options, index= 0,on_change=change_car_callback)
+    print('选择车型:'+ car_option)
+    return car_option
 
 # 显示对应车型的可自定义功能
 def show_Enable_Func():
@@ -24,9 +28,7 @@ def show_Enable_Func():
     st.multiselect('可自定义功能', options = _func_options_list,default= _func_options_list)
     return True
 
-show_Enable_Func()
-
-@st.cache_data(experimental_allow_widgets=True)
+#@st.cache_data(experimental_allow_widgets=True)
 def show_Edit(dataframe):    # 初次显示编辑区
     print('running show_Edit')
     try:
@@ -83,28 +85,56 @@ def selected_callback(cmd_name):
     except Exception as e:
         print('{0} selected_callback err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
 
-show_Edit(raw_table_data)
+def ui_update_dataframe(dataframe): #每次刷新根据session state更新dataframe
+    try:
+        for row, row_item in dataframe.iterrows():
+            cmd_name = row_item.iloc[0]  # name
+            cmd_type = row_item.iloc[11]  # type
 
+            cur_value = st.session_state[cmd_name]   # 当前cmd对应session state的值
+            if cmd_type == CUSTOM_INPUT_TYPE_FLAG:      # 自定义输入类型
+                starting_byte = int(row_item['starting_byte'])  # 开始字节
+                content_bits = int(row_item['content_bits'])    # 内容位数
+                multiple = float(row_item['multiple'])          # 倍数
+                offset = int(row_item['offset'])                # 偏移量
+                is_reverse = row_item['reverse']                # 是否反向
+                hex_string = format(int((cur_value - offset)/multiple),'x') # 转成16进制字符串
+                print('value:',cur_value,' hex_string:', hex_string)
+                can_data = row_item['can_data']
+            elif cmd_type == ON_OFF_TYPE_FLAG:          # 可选择类型
+                example = row_item.iloc[8]
+                can_data = example[0][cur_value]        # 取出待发送can数据
+                # 更新dataframe
+                raw_table_data.iloc[row,1] = can_data   # 更新can_data列
+                raw_table_data.iloc[row,10] = cur_value # 更新 value 列
+                print('Type 2 -> update can_data:',can_data,',value:', cur_value)
+        return raw_table_data
+    except Exception as e:
+        print('{0} ui_update_dataframe err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
 
-for key in st.session_state.keys():         # 每次刷新根据session state更新dataframe
-    cur_value = st.session_state[key]   # 当前值
-    row = raw_table_data.loc[raw_table_data['name'] == key].index[0]   # 获取行
-    cmd_type = raw_table_data.iloc[row,11]  # type
-    if cmd_type == CUSTOM_INPUT_TYPE_FLAG:      # 自定义输入类型
-        pass
-    elif cmd_type == ON_OFF_TYPE_FLAG:          # 可选择类型
-        example = raw_table_data.iloc[row,8]    
-        can_data = example[0][cur_value]        # 取出待发送can数据
-        # 更新dataframe
-        raw_table_data.iloc[row,1] = can_data   # 更新can_data列
-        raw_table_data.iloc[row,10] = cur_value # 更新 value 列
+if __name__ == '__main__':
+    st.set_page_config(layout="wide",page_title='CAN Data')
 
-        print('Type 2 -> update can_data:',can_data,';update value:', cur_value)
+    # 显示标题
+    st.title(':blue[模拟 CAN Data] Platform')
 
-print(raw_table_data)
-st.dataframe(raw_table_data)
-print(st.session_state)
+    car_option = show_car_names()   # 界面显示车辆选择
 
-## 任务：
-## @st.cache_data(experimental_allow_widgets=True)
-## 切换车辆 如何更新session state
+    # 根据选择的car_option获取原始数据，
+    raw_table_data = load_table_data('can_data_all_model', car_option)  # 原始数据
+
+    # 对原始数据进行处理，缓存：导入CAN数据
+    raw_table_data = import_can(raw_table_data)
+
+    # 显示对应车型的可自定义功能
+    show_Enable_Func()
+
+    # 显示编辑选项
+    show_Edit(raw_table_data)
+
+    # 不断更新dataframe
+    raw_table_data = ui_update_dataframe(raw_table_data)
+
+    print(raw_table_data)
+    # 显示表格
+    st.dataframe(raw_table_data,use_container_width=True)
