@@ -38,7 +38,7 @@ def load_table_data(fileName, carName):
         print('fileName: ', fileName, os.path.exists(file_Path))
         # 打开目标文件
         df = pd.read_excel(file_Path,sheet_name=carName,header=3,names=[
-            'name','can_data','rec_id','length','starting_byte','content_bits','multiple','offset',
+            'name','can_message','rec_id','length','starting_byte','content_bits','multiple','offset',
             'example','remark','value','type','reverse'])
         # 删除没有的CAN功能-> 根据 接收ID 是否为空判断
         df = df.dropna(subset=['rec_id'])

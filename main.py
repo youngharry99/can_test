@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 from func import *  # 封装功能
 
-def clear_session_state():
-    # Delete all the items in Session state
+def clear_session_state():  # Delete all the items in Session state
     if st.session_state:
         for key in st.session_state.keys():
             del st.session_state[key]
@@ -52,39 +51,57 @@ def show_Edit(dataframe):    # 初次显示编辑区
     except Exception as e:
         print('{0} show_Edit err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
 
-def input_callback(cmd_name):
+def replace_Can_Data(can_message:str, starting_byte : int, content_bits:int, hex_string:str, is_reverse:int):
+    """_summary_
+    Arguments:
+        can_message {str} -- can报文    "12F95F50#00 00 00 00 00 00 11 22"\n
+        starting_byte {int} -- 开始字节\n
+        content_bits {int} -- 内容位数\n
+        hex_string {str} -- 替换can_message的data部分\n
+        is_reverse {int} -- 是否反向替换\n
+    Return:
+        message {str}
+    """
+    # 18DAF160#22 04 F3 04 61 04 90 04#油量11.21L 0461
+    # 12F85050#XX 5C 03 XX XX XX#转速860  035C
     try:
-        cur_value = st.session_state[cmd_name]  # 获取对应的输入值
-        row_data = raw_table_data.loc[raw_table_data['name'] == cmd_name]
+        message = can_message
+        message_list = can_message.split('#')
+        id = message_list[0]
+        data = message_list[1]
+        var_length  = int(content_bits/4)    # 内容位转成字符串长度
+        
+        if var_length%2 == 0:
+            flag = 0
+        else:
+            flag = 1
+        start_index = starting_byte*2 + flag
+        end_index = starting_byte*2 + var_length + flag
+        # 补零
+        if var_length < len(hex_string):
+            print('输入的value超出范围',hex_string)
+            '''后续操作'''
+            print('-------------------------------------------')
+        elif var_length > len(hex_string):
+            hex_string = hex_string.zfill(var_length)   # 向前补零到var_length
 
-        can_data = row_data['can_data']
-        starting_byte = int(row_data['starting_byte'])  # 开始字节
-        content_bits = int(row_data['content_bits'])    # 内容位数
-        multiple = float(row_data['multiple'])          # 倍数
-        offset = int(row_data['offset'])                # 偏移量
-        hex_string = format(int(cur_value/multiple),'x')
-        print('hex_string = ', hex_string)
-        # 根据规则生成can_data
-        #18DAF160#22 04 F3 04 61 04 90 04
+        if is_reverse:
+            # 替换
+            data = data[:start_index] + hex_string + data[end_index:]
+            print('replace =', data)
+        else:
+            # 将字符串拆分成长度为2的子字符串列表
+            pairs = [hex_string[i:i+2] for i in range(0, len(hex_string), 2)]
+            # 对每个子字符串进行反转并连接起来s
+            swapped_str = ''.join(pairs[::-1])
+            data = data[:start_index] + swapped_str + data[end_index:]
+            print('swapped_str', swapped_str)
+            print('replace =', data)
+
+        return message
     except Exception as e:
-        print('{0} input_callback err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
-
-def selected_callback(cmd_name):
-    try:
-        cur_value = st.session_state[cmd_name]  # 对应的输入值
-        print('cur_value = ',cur_value)
-        #example = raw_table_data.loc[raw_table_data['name'] == cmd_name,'example'].values[0]
-        row = raw_table_data.loc[raw_table_data['name'] == cmd_name].index[0]   # 获取行
-        example = raw_table_data.iloc[row,8]
-        can_data = example[0][cur_value]
-        # 更新dataframe
-        raw_table_data.iloc[row,1] = can_data   # 更新can_data列
-        raw_table_data.iloc[row,10] = cur_value # 更新 value 列
-        print('update can_data:',can_data,';update value:', cur_value)
-
-    except Exception as e:
-        print('{0} selected_callback err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
-
+        print('{0} replace_Can_Data err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
+    
 def ui_update_dataframe(dataframe): #每次刷新根据session state更新dataframe
     try:
         for row, row_item in dataframe.iterrows():
@@ -97,10 +114,14 @@ def ui_update_dataframe(dataframe): #每次刷新根据session state更新datafr
                 content_bits = int(row_item['content_bits'])    # 内容位数
                 multiple = float(row_item['multiple'])          # 倍数
                 offset = int(row_item['offset'])                # 偏移量
-                is_reverse = row_item['reverse']                # 是否反向
-                hex_string = format(int((cur_value - offset)/multiple),'x') # 转成16进制字符串
+                is_reverse = int(row_item['reverse'])                # 是否反向
+                hex_string = format(int((cur_value - offset)/multiple),'x').upper() # 转成16进制字符串
                 print('value:',cur_value,' hex_string:', hex_string)
-                can_data = row_item['can_data']
+                can_message = row_item.iloc[1]
+
+                replace_Can_Data(can_message, starting_byte, content_bits, hex_string, is_reverse)
+
+
             elif cmd_type == ON_OFF_TYPE_FLAG:          # 可选择类型
                 example = row_item.iloc[8]
                 can_data = example[0][cur_value]        # 取出待发送can数据
@@ -138,3 +159,4 @@ if __name__ == '__main__':
     print(raw_table_data)
     # 显示表格
     st.dataframe(raw_table_data,use_container_width=True)
+
