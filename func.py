@@ -3,6 +3,8 @@ import time
 import pandas as pd
 import os
 import re
+import logging
+import json
 CUSTOM_INPUT_TYPE_FLAG = 1
 ON_OFF_TYPE_FLAG = 2
 
@@ -117,7 +119,38 @@ def import_can(raw_table_data):# 导入can数据
     except Exception as e:
         print('{0} import_can err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
 
+def setup_logger(name):
+    # 创建logger实例
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
 
+    # # 创建一个文件处理器，用于将日志写入文件
+    # file_handler = logging.FileHandler('logfile.log')
+    # file_handler.setLevel(logging.INFO)
+
+    # 创建一个控制台处理器，用于将日志输出到控制台
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    # 创建一个格式化器
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s',datefmt="%Y-%m-%d %H:%M:%S")
+    console_handler.setFormatter(formatter)
+
+    # 将处理器添加到logger中
+    #logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
+
+@st.cache_data
+def read_config(filename):
+    try:
+        with open(filename, 'r') as config_file:
+            config_data = json.load(config_file)
+            # 获取默认值
+            return config_data
+    except Exception as e:
+        print('{0} read_config err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
 if __name__ == '__main__':
     pass
 

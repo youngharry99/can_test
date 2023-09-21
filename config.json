@@ -1,0 +1,9 @@
+{
+    "sn" : "B2D2E00075",
+    "broker" : "mqtt-alpha.smart-iov.net",
+    "port" : 8801,
+    "userName"     : "test10",
+    "client_id"    : "app_test10",
+    "mqttPassword" : "18cbd2b9800.aca5bc82c4ed053e9b6bed3a785e756a"
+}
+
