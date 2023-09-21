@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 from func import *  # 封装功能
 from mqtt_test import CANTestThread
+from streamlit.runtime.scriptrunner import add_script_run_ctx
+import time
+from streamlit_autorefresh import st_autorefresh
+
 
 def clear_session_state():  # Delete all the items in Session state
     if st.session_state:
@@ -18,14 +22,16 @@ def change_car_callback():  # 改变车辆时，清除原来所有session state
 # 显示选择车型,使用 缓存load_car_names数据
 def show_car_names():   # 选择车型
     _car_options = load_car_names('can_data_all_model')
-    car_option = st.selectbox('选择车型', _car_options, index= 0,on_change=change_car_callback)
+    car_option = st.sidebar.selectbox('选择车型', _car_options, index= 0,on_change=change_car_callback)
     print('选择车型:'+ car_option)
     return car_option
 
 # 显示对应车型的可自定义功能
 def show_Enable_Func():
     _func_options_list = list(raw_table_data.iloc[:,0])
-    st.multiselect('可自定义功能', options = _func_options_list,default= _func_options_list)
+    func = st.sidebar.expander('已采集功能')
+    with func:
+        st.multiselect('功能', options = _func_options_list,default= _func_options_list)
     return True
 
 #@st.cache_data(experimental_allow_widgets=True)
@@ -105,7 +111,7 @@ def replace_Can_Data(can_message:str, starting_byte : int, content_bits:int, hex
 
 def ui_update_dataframe(dataframe): #每次刷新根据session state更新dataframe
     try:
-        for row, row_item in dataframe.iterrows():
+        for row, row_item in raw_table_data.iterrows():
             cmd_name = row_item.iloc[0]  # name
             cmd_type = row_item.iloc[11]  # type
 
@@ -117,11 +123,10 @@ def ui_update_dataframe(dataframe): #每次刷新根据session state更新datafr
                 offset = int(row_item['offset'])                # 偏移量
                 is_reverse = int(row_item['reverse'])                # 是否反向
                 hex_string = format(int((cur_value - offset)/multiple),'x').upper() # 转成16进制字符串
-                print('value:',cur_value,' hex_string:', hex_string)
+                # print('value:',cur_value,' hex_string:', hex_string)
                 can_message = row_item.iloc[1]
 
-                replace_Can_Data(can_message, starting_byte, content_bits, hex_string, is_reverse)
-
+                #replace_Can_Data(can_message, starting_byte, content_bits, hex_string, is_reverse)
 
             elif cmd_type == ON_OFF_TYPE_FLAG:          # 可选择类型
                 example = row_item.iloc[8]
@@ -129,12 +134,16 @@ def ui_update_dataframe(dataframe): #每次刷新根据session state更新datafr
                 # 更新dataframe
                 raw_table_data.iloc[row,1] = can_data   # 更新can_data列
                 raw_table_data.iloc[row,10] = cur_value # 更新 value 列
-                print('Type 2 -> update can_data:',can_data,',value:', cur_value)
+                # print('Type 2 -> update can_data:',can_data,',value:', cur_value)
+        print('update dataframe')
         return raw_table_data
     except Exception as e:
         print('{0} ui_update_dataframe err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
 
 def start_test():   # 开启mqtt测试
+    st.session_state['sended_times'] = 0
+    st.session_state['running'] = True  # 开启线程运行
+
     # 连接MQTT服务器
     # 从session state获取信息
     cur_sn = st.session_state['sn']
@@ -146,13 +155,20 @@ def start_test():   # 开启mqtt测试
     # 创建测试线程
     t = CANTestThread(sn=cur_sn,broker=cur_broker,port=cur_port,username=cur_username,
                       client_id=cur_client_id,password=cur_password,can_dataframe=raw_table_data)
+    add_script_run_ctx(t)
     if t:
         t.start()   # 启动线程
+        st.toast(':blue[开启线程发送]',icon='💨')
 
-
+def stop_test():    # 结束发送
+    st.session_state['running'] = False # 停止线程
+    st.toast(':green[结束发送CAN]')
 
 if __name__ == '__main__':
     st.set_page_config(layout="wide",page_title='CAN Data')
+
+    # 设置自动页面刷新
+    st_autorefresh(interval=4 * 1000, key = 'test')
 
     # 显示标题
     st.title(':blue[模拟 CAN Data] Platform')
@@ -163,41 +179,41 @@ if __name__ == '__main__':
         st.session_state['broker'] = config_info['broker']
         st.session_state['port'] = config_info['port']
 
-    col1, col2, col3 = st.columns([1,1,2])
-    with col1:
+    col1, col2, col3 = st.columns([1,1,1])
+    with col1:  # MQTT信息
         with st.form("user info"):
             st.text_input('终端SN',key='sn',value=config_info['sn'])
             st.text_input('username',key='username',value=config_info['userName'])
             st.text_input('client_id',key='client_id',value=config_info['client_id'])
             st.text_input('password',key='password',value=config_info['mqttPassword'])
             # st.button('断开连接')
-            st.form_submit_button('开始发送',on_click=start_test)
+            submit = st.form_submit_button('开始发送',on_click=start_test)
 
-    with col2:
+    with col2:  # 控制中心
         st.write('控制中心')
-        # MQTT状态
-        with st.status(':orange[等待连接MQTT Broker]', state= 'error') as status:
-            st.write('ok')
-        st.button('停止发送')
-        st.write(st.session_state)
+        stop = st.button('停止发送', on_click=stop_test)
+        #st.write(st.session_state)
 
-    with col3:  # 日志列
-        st.text_area('日志监控','''t was the best of times, it was the worst of times, it was
-    the age of wisdom, it was the age of foolishness, it was
-    the epoch of belief, it was the epoch of incredulity, it
-    was the season of Light, it was the season of Darkness, it
-    was the spring of hope, it was the winter of despai''',height=320)
-        st.button('清空')
+    with col3:  # 日志监控
+        with st.status(':green[运行状态]]',expanded=True) as status:
+            if 'running' not in st.session_state:
+                status.update(label=':orange[等待发送]',state='error',expanded=True)
+            elif st.session_state['running'] == True:
+                st.write(':blue[正在发送]')
+                if 'sended_times' in st.session_state:
+                    sended_times = st.session_state['sended_times'] 
+                    if sended_times > 0:
+                        st.write('发送次数: ',sended_times)
+
+            elif st.session_state['running'] == False:
+                status.update(label=':green[结束发送]',state='complete',expanded=True)
 
     car_option = show_car_names()   # 界面显示车辆选择
-
     # 根据选择的car_option获取原始数据，
     raw_table_data = load_table_data('can_data_all_model', car_option)  # 原始数据
-
     # 对原始数据进行处理，缓存：导入CAN数据
     raw_table_data = import_can(raw_table_data)
 
-    # 显示对应车型的可自定义功能
     show_Enable_Func()
 
     expander = st.sidebar.expander('自定义CAN数据')
