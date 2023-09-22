@@ -42,18 +42,18 @@ class Mqtt_Client:
     def on_message(self, client, userdata, msg):
         print(msg.topic+" "+str(msg.payload))
 
-    def on_subscribe(client, userdata, mid, grated_qos, properties=None):
+    def on_subscribe(client, userdata, mid, grated_qos, properties=None):   #   订阅回调
         print('subscribe success!')
 
-    def publish(self, message):
+    def publish(self, message): # 发送信息
         paylad = '5,3,1677235643,' + str(random.randint(1000, 3000)) + ',34383038,' + message
         self.client.publish(self.topic, paylad)
         print(f"Published message: {message}")
 
-    def disconnect(self):
+    def disconnect(self):   # 断开连接
         self.client.loop_stop()
         self.client.disconnect()
-        print('已经断开连接')
+        print('{0}Disconnect from broker'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]')))
 
 class CANTestThread(threading.Thread):
     def __init__(self,sn,broker, port, username, client_id, password,can_dataframe,call_back = None):
@@ -64,7 +64,7 @@ class CANTestThread(threading.Thread):
         self.username = username
         self.client_id = client_id
         self.password = password
-        self.can_dataframe = can_dataframe
+        self.can_dataframe = st.session_state['current_df']
         #self.toast = call_back
 
     def run(self) -> None:      # 重写线程run方法
@@ -72,29 +72,39 @@ class CANTestThread(threading.Thread):
             client = Mqtt_Client(sn=self.sn,broker=self.broker, port= self.port, username=self.username, client_id= self.client_id, password=self.password)
             client.connect_mqtt()        # 连接mqtt
 
-            
             sended_times = 0    # 发送次数
+
             while(1):
                 # 遍历发送数据
                 for pos, row in self.can_dataframe.iterrows():
+                    cmd_name = row.iloc[0]  # 命令名称
+                    cmd_value = row.iloc[10]    # 当前值
                     can_message = row.iloc[1]
                     cmd = 'CANSEND=' + can_message
                     if st.session_state['running'] == True:
+                        print("name={0}, value={1}".format(cmd_name,cmd_value))
                         client.publish(cmd)
-                    else:
+                    else:   # 结束线程，断开mqtt连接
                         client.disconnect()
-                        # st.toast(':red[结束发送CAN]')
-                        print('threading is dead')
+                        print('Kill the test Thread')
+                        st.session_state['log_df'].loc[len(st.session_state['log_df'])] = [current_time(), '结束发送']
                         return
+                    st.session_state['log_df'].loc[len(st.session_state['log_df'])] = [current_time(), cmd_name + ':' + str(cmd_value)]
                     time.sleep(1)
+                self.can_dataframe = st.session_state['current_df'] # 运行完一轮重新获取current_df
+
                 sended_times = sended_times + 1
-                print('sended_times = ', sended_times)
-                st.session_state['sended_times'] = sended_times #更新send_times
+                st.session_state['sended_times'] = sended_times # 更新send_times
+
+                print('{0}sended_times = {1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), sended_times))
 
             client.disconnect()
             print("is_connected",client.client.is_connected())
         except Exception as e:
             print('{0} mqtt_can_test err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
+
+def current_time():
+    return time.strftime('[%Y-%m-%d-%H:%M:%S]')
 
 if __name__ == '__main__':
     pass

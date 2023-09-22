@@ -86,12 +86,12 @@ def is_integer(s):  # 判断字符串否为整数
         return False
 
 @st.cache_data
-def import_can(raw_table_data):# 导入can数据
+def import_can(data_table):# 导入can数据
     # 生成将要发送的can数据
     # 将示例变成字典存储
     print('running import_can()')
     try:
-        for pos, row in raw_table_data.iterrows():
+        for pos, row in data_table.iterrows():
             # 将示例转成字典存储
             data_list = [line.split('#') for line in row.iloc[8].strip().split('\n')]
             default_key = None  # 默认第一个键
@@ -107,15 +107,15 @@ def import_can(raw_table_data):# 导入can数据
                     default_can_data = value
 
             # 将can_example_dict字典变成列表插入example单元格中
-            raw_table_data.iloc[pos,8] = [can_example_dict]
+            data_table.iloc[pos,8] = [can_example_dict]
 
             if row.loc['type'] == 1:    # 如果为自定义输入类型,提取其中的数字字符串
                 default_key = extract_number(default_key)
 
             # 将初始化[默认为第一位]的 value插入value单元格中，default_can_data放入can_data
-            raw_table_data.iloc[pos,10] = default_key
-            raw_table_data.iloc[pos,1] = default_can_data
-        return raw_table_data
+            data_table.iloc[pos,10] = default_key
+            data_table.iloc[pos,1] = default_can_data
+        return data_table
     except Exception as e:
         print('{0} import_can err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
 
@@ -143,7 +143,7 @@ def setup_logger(name):
     return logger
 
 @st.cache_data
-def read_config(filename):
+def read_config(filename):  # 配置文件
     try:
         with open(filename, 'r') as config_file:
             config_data = json.load(config_file)
@@ -151,6 +151,7 @@ def read_config(filename):
             return config_data
     except Exception as e:
         print('{0} read_config err:{1}'.format(time.strftime('[%Y-%m-%d-%H:%M:%S]'), str(e)))
+
 if __name__ == '__main__':
     pass
 
